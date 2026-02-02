@@ -8,6 +8,9 @@ import '../widgets/qr_preview_widget.dart';
 import '../widgets/paywall_modal.dart';
 import '../../domain/models/qr_config.dart';
 import '../../core/di.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import '../../domain/services/qr_export_service.dart';
 import '../../domain/services/purchase_service.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -28,6 +31,7 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   final TextEditingController _controller = TextEditingController();
+  final GlobalKey _qrKey = GlobalKey();
 
   @override
   void initState() {
@@ -62,7 +66,9 @@ class _HomeViewState extends State<HomeView> {
                   const SizedBox(height: 32),
                   _buildStepIndicator(state),
                   const SizedBox(height: 32),
-                  Center(child: QrPreview(config: state.config)),
+                  Center(
+                    child: QrPreview(config: state.config, globalKey: _qrKey),
+                  ),
                   const SizedBox(height: 40),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -188,7 +194,9 @@ class _HomeViewState extends State<HomeView> {
             decoration: BoxDecoration(
               color: selected ? const Color(0xFF6366F1) : Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: selected ? [BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.3), blurRadius: 10)] : [],
+              boxShadow: selected
+                  ? [BoxShadow(color: const Color(0xFF6366F1).withValues(alpha: 0.3), blurRadius: 10)]
+                  : [],
             ),
             child: Icon(icon, color: selected ? Colors.white : Colors.black45),
           ),
@@ -232,6 +240,10 @@ class _HomeViewState extends State<HomeView> {
     }
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
+
+    // Check if the widget is still in the tree before using context
+    if (!context.mounted) return;
+
     if (image != null) {
       context.read<QrCubit>().updateConfig(state.config.copyWith(logoPath: image.path));
     }
@@ -319,7 +331,10 @@ class _HomeViewState extends State<HomeView> {
             ListTile(
               leading: const Icon(Icons.image),
               title: const Text('PNG (Standard)'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                _saveImage(context);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.hd),
@@ -343,5 +358,28 @@ class _HomeViewState extends State<HomeView> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveImage(BuildContext context) async {
+    try {
+      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData != null) {
+        final pngBytes = byteData.buffer.asUint8List();
+        final path = await sl<IQrExportService>().saveImage(pngBytes);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('QR Code saved to $path')));
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save QR Code: $e')));
+      }
+    }
   }
 }

@@ -78,7 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           AnimatedContainer(
             duration: const Duration(milliseconds: 500),
             padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(color: data.color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: data.color.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(data.icon, size: 100, color: data.color),
           ),
           const SizedBox(height: 48),
